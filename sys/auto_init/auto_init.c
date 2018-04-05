@@ -96,6 +96,10 @@
 #include "schedstatistics.h"
 #endif
 
+#ifdef MODULE_GGS
+#include "net/ggs.h"
+#endif
+
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
@@ -201,6 +205,15 @@ void auto_init(void)
 #ifdef MODULE_AUTO_INIT_USBUS
     extern void auto_init_usb(void);
     auto_init_usb();
+#endif
+#ifdef MODULE_AUTO_INIT_GORM
+    DEBUG("Auto init Gorm\n");
+    extern void auto_init_gorm(void);
+    auto_init_gorm();
+#endif /* MODULE_GORM */
+#ifdef MODULE_GGS
+    DEBUG("Auto init Gorm GATT Services\n");
+    ggs_init();
 #endif
 
 /* initialize network devices */

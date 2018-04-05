@@ -22,4 +22,8 @@ ifneq (,$(filter auto_init_usbus,$(USEMODULE)))
   DIRS += usb
 endif
 
+ifneq (,$(filter auto_init_gorm,$(USEMODULE)))
+  DIRS += gorm
+endif
+
 include $(RIOTBASE)/Makefile.base

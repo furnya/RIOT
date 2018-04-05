@@ -195,4 +195,14 @@ PSEUDOMODULES += crypto_aes_precalculated
 # This pseudomodule causes a loop in AES to be unrolled (more flash, less CPU)
 PSEUDOMODULES += crypto_aes_unroll
 
+# Gorm provides a number of pseudomodules for fine grained stack configuration
+PSEUDOMODULES += gorm_standalone
+PSEUDOMODULES += gorm_broadcaster
+PSEUDOMODULES += gorm_peripheral
+PSEUDOMODULES += gorm_scanner
+PSEUDOMODULES += gorm_central
+
+# Provide a framework for Gorm GATT services (GGS)
+PSEUDOMODULES += ggs_%
+
 # Packages may also add modules to PSEUDOMODULES in their `Makefile.include`.

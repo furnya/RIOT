@@ -160,6 +160,12 @@ endif
 ifneq (,$(filter netif,$(USEMODULE)))
     DIRS += net/netif
 endif
+ifneq (,$(filter gorm,$(USEMODULE)))
+  DIRS += net/gorm
+endif
+ifneq (,$(filter gorm_ibeacon,$(USEMODULE)))
+  DIRS += net/gorm/ibeacon
+endif
 
 DIRS += $(dir $(wildcard $(addsuffix /Makefile, $(USEMODULE))))
 
