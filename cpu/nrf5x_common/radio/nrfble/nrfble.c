@@ -25,6 +25,7 @@
 
 #include "cpu.h"
 #include "assert.h"
+#include "xtimer.h"
 
 #include "nrfble.h"
 #include "net/netdev/ble.h"
