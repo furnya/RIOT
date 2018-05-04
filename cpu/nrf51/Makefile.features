@@ -1,5 +1,2 @@
-FEATURES_PROVIDED += radio_ble
-FEATURES_PROVIDED += radio_nrfble
-
 -include $(RIOTCPU)/nrf5x_common/Makefile.features
 
