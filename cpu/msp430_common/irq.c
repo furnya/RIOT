@@ -28,28 +28,24 @@ char __isr_stack[ISR_STACKSIZE];
 
 unsigned int irq_disable(void)
 {
-    unsigned int state;
-    __asm__("mov.w r2,%0" : "=r"(state));
-    state &= GIE;
+    int state = irq_is_enabled();
 
     if (state) {
         __disable_irq();
     }
 
-    return state;
+    return (unsigned)state;
 }
 
 unsigned int irq_enable(void)
 {
-    unsigned int state;
-    __asm__("mov.w r2,%0" : "=r"(state));
-    state &= GIE;
+    int state = irq_is_enabled();
 
     if (!state) {
         __enable_irq();
     }
 
-    return state;
+    return (unsigned)state;
 }
 
 void irq_restore(unsigned int state)
@@ -57,6 +53,13 @@ void irq_restore(unsigned int state)
     if (state) {
         __enable_irq();
     }
+}
+
+int irq_is_enabled(void)
+{
+    unsigned int state;
+    __asm__("mov.w r2,%0" : "=r"(state));
+    return (state & GIE);
 }
 
 int irq_is_in(void)
