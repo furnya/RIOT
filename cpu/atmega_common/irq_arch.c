@@ -83,6 +83,14 @@ void irq_restore(unsigned int state)
 }
 
 /**
+ * @brief Test if interrupts are currently enabled
+ */
+int irq_is_enabled(void)
+{
+    return __get_interrupt_state();
+}
+
+/**
  * @brief See if the current context is inside an ISR
  */
 int irq_is_in(void)
