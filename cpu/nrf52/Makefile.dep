@@ -4,3 +4,8 @@ ifneq (,$(filter nrf802154,$(USEMODULE)))
   USEMODULE += luid
   USEMODULE += netdev_ieee802154
 endif
+
+ifneq (,$(filter gorm,$(USEMODULE)))
+  FEATURES_REQUIRED += radio_nrfble
+  USEMODULE += nrfble
+endif
