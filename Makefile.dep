@@ -1004,6 +1004,7 @@ ifneq (,$(filter devfs_random,$(USEMODULE)))
 endif
 
 ifneq (,$(filter mia,$(USEMODULE)))
+  USEMODULE += core_thread_flags
   USEMODULE += inet_csum
   USEMODULE += xtimer
   USEMODULE += mia_dhcp
