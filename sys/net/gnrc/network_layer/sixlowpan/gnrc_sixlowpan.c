@@ -27,8 +27,8 @@
 #include "net/gnrc/netif.h"
 #include "net/sixlowpan.h"
 
-#ifdef MODULE_UDPFLOOD
-#include "udpflood.h"
+#ifdef MODULE_AVGSTATS
+#include "avgstats.h"
 #endif
 
 #define ENABLE_DEBUG 0
@@ -96,8 +96,9 @@ void gnrc_sixlowpan_dispatch_send(gnrc_pktsnip_t *pkt, void *context,
     (void)page;
     assert(pkt->type == GNRC_NETTYPE_NETIF);
 
-#ifdef MODULE_UDPFLOOD
-    udpflood_6lo_tx_inc(gnrc_pkt_len(pkt->next));
+#ifdef MODULE_AVGSTATS
+    avgstats_inc(AVGSTATS_6LO_TX_CNT);
+    avgstats_add(AVGSTATS_6LO_TX_BYTES, (unsigned)gnrc_pkt_len(pkt->next));
 #endif
 
     gnrc_netif_hdr_t *hdr = pkt->data;
@@ -178,8 +179,9 @@ static void _receive(gnrc_pktsnip_t *pkt)
 
     payload = gnrc_pktsnip_search_type(pkt, GNRC_NETTYPE_SIXLOWPAN);
 
-#ifdef MODULE_UDPFLOOD
-    udpflood_6lo_rx_inc(gnrc_pkt_len(payload));
+#ifdef MODULE_AVGSTATS
+    avgstats_inc(AVGSTATS_6LO_RX_CNT);
+    avgstats_add(AVGSTATS_6LO_RX_BYTES, (unsigned)gnrc_pkt_len(payload));
 #endif
 
     if ((payload == NULL) || (payload->size < 1)) {
