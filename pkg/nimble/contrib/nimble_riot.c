@@ -45,6 +45,11 @@
 #include "nrf_clock.h"
 #endif
 
+#ifdef MODULE_NIMBLE_RPBLE
+#include "nimble_rpble.h"
+#include "nimble_rpble_params.h"
+#endif
+
 static char _stack_controller[NIMBLE_CONTROLLER_STACKSIZE];
 #endif
 
@@ -134,5 +139,10 @@ void nimble_riot_init(void)
     res = nimble_autoconn_init(&nimble_autoconn_params, NULL, 0);
     assert(res == NIMBLE_AUTOCONN_OK);
     nimble_autoconn_enable();
+#endif
+
+#ifdef MODULE_NIMBLE_RPBLE
+    res = nimble_rpble_init(&nimble_rpble_params);
+    assert(res == NIMBLE_RPBLE_OK);
 #endif
 }
