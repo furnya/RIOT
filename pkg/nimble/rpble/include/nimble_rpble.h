@@ -49,9 +49,14 @@
  * - conn timeout -> deduct from T_A
  * - connection itvl, supervision timeout, slave latency -> 0
  *
+ * # Limitations
+ * - supports only a single DODAG
+ *
  * # TODOs
- * @todo        never remove active parents from ppt
- * @todo        use DODAG ID in evaluation phase: but how?
+ * @todo        make parent selection more dynamic: enable a node to switch to
+ *              switch parents after being connected to one
+ * @todo        use DODAG ID, instance ID, and version in evaluation phase
+ * @todo        update scan/connection parameters during runtime
  *
  * @{
  *
@@ -100,7 +105,6 @@ typedef struct {
     uint8_t version;
     uint8_t role;
     uint16_t rank;
-    uint8_t free_slots;
 } nimble_rpble_ctx_t;
 
 int nimble_rpble_init(const nimble_rpble_cfg_t *cfg);

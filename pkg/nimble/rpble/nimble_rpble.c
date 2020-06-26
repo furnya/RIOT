@@ -35,13 +35,6 @@
 #include "host/ble_gap.h"
 #include "nimble/nimble_port.h"
 
-#ifdef MODULE_EXPSTATS
-#include "expstats.h"
-#define EXPSTAT(x)      expstats_log(x)
-#else
-#define EXPSTAT(x)
-#endif
-
 #define ENABLE_DEBUG        (0)
 #include "debug.h"
 
@@ -50,24 +43,11 @@
 #define SCORE_NONE          (0U)
 
 #define VENDOR_FIELD_LEN    (23U)
-
-/* PPT fields */
-#define PPT_STATE_FREE      (0U)
-#define PPT_STATE_FILLED    (1U)
-
-/* RPL meta data context fields */
 #define POS_INST_ID         (0)
 #define POS_DODAG_ID        (1)
 #define POS_VERSION         (17)
 #define POS_RANK            (18)
 #define POS_FREE_SLOTS      (20)
-
-/* get shortcuts for the max number of connections, parents, and children */
-#define PARENT_NUM          (1U)
-#define CONN_NUMOF          (MYNEWT_VAL_BLE_MAX_CONNECTIONS)
-#define CHILD_NUM           (CONN_NUMOF - PARENT_NUM)
-
-
 
 /* keep the timing parameters for connections and advertisements */
 static struct ble_gap_adv_params _adv_params = { 0 };
@@ -88,21 +68,6 @@ static struct ble_npl_callout _evt_eval;
 
 static nimble_netif_eventcb_t _eventcb = NULL;
 
-
-#if ENABLE_DEBUG
-static void _dbg_msg(const char *text, const uint8_t *addr)
-{
-    printf("[rpble] %s (", text);
-    bluetil_addr_print(addr);
-    printf(")\n");
-}
-#else
-static void _dbg_msg(const char *text, const uint8_t *addr)
-{
-    (void)text;
-    (void)addr;
-}
-#endif
 
 static uint16_t _psel_score(uint16_t rank, uint8_t free)
 {
@@ -179,12 +144,28 @@ static void _on_scan_evt(uint8_t type,
         return;
     }
 
-    // TODO: filter peer for Instance ID, maybe DODAG-ID, and more?
+    /**
+     * @todo    Here we need to improve the filtering: so far, we consider every
+     *          node we see that is capable of rplbe to be a parent. We should
+     *          however also filter for instance ID and possibly the DODAG ID as
+     *          well. On top, we should probably only consider nodes with >=
+     *          version as parent
+     */
 
     /* score and compare advertising peer */
     uint16_t rank = byteorder_bebuftohs(&msd_field.data[2 + POS_RANK]);
     uint8_t free = msd_field.data[2 + POS_FREE_SLOTS];
     uint16_t score = _psel_score(rank, free);
+
+    /* our currently preferred parent might have updated its score in the mean
+     * time, so we need to check that */
+    if (memcmp(&_psel.addr, addr, sizeof(ble_addr_t)) == 0) {
+        _psel.score = score;
+        return;
+    }
+
+    /* we consider only parents with a lower rank and remember the one with the
+     * best score */
     if (((_local_rpl_ctx.rank == 0) || (_local_rpl_ctx.rank > rank)) &&
         (score > _psel.score)) {
         _psel.score = score;
@@ -195,6 +176,7 @@ static void _on_scan_evt(uint8_t type,
 static void _parent_find(void)
 {
     _psel.score = SCORE_NONE;
+    memset(&_psel.addr, 0, sizeof(ble_addr_t));
     nimble_scanner_start();
     ble_npl_callout_reset(&_evt_eval, _eval_itvl);
 }
@@ -209,7 +191,6 @@ static void _parent_connect(struct ble_npl_event *ev)
 {
     (void)ev;
 
-    // TODO: we probably need to make this thread safe... */
     /* for now, we only try to connect to a parent if we have none */
     assert(_current_parent == PARENT_NONE);
     /* just in case this event is triggered while we were configured to be the
@@ -229,7 +210,6 @@ static void _parent_connect(struct ble_npl_event *ev)
         return;
     }
 
-    _dbg_msg("parent found, trying to connect", _psel.addr.val);
     int res = nimble_netif_connect(&_psel.addr, &_conn_params, _conn_timeout);
     if (res < 0) {
         DEBUG("# err: unable to start connection to parent\n");
@@ -247,44 +227,32 @@ static void _on_netif_evt(int handle, nimble_netif_event_t event,
     switch (event) {
         case NIMBLE_NETIF_CONNECTED_MASTER:
             assert(_current_parent == handle);
-            _dbg_msg("PARENT selected", addr);
-            EXPSTAT(EXPSTATS_RPBLE_PARENT_CONN);
             /* send a DIS once connected to a (new) parent) */
-            gnrc_rpl_send_DIS(NULL, (ipv6_addr_t *) &ipv6_addr_all_rpl_nodes, NULL, 0);
+            gnrc_rpl_send_DIS(NULL, (ipv6_addr_t *) &ipv6_addr_all_rpl_nodes,
+                              NULL, 0);
             _children_accept();
             break;
         case NIMBLE_NETIF_CONNECTED_SLAVE:
-            _dbg_msg("CHILD added", addr);
-            EXPSTAT(EXPSTATS_RPBLE_CHILD_CONN);
             _children_accept();
             break;
         case NIMBLE_NETIF_CLOSED_MASTER:
             nimble_netif_accept_stop();
-            _dbg_msg("PARENT lost", addr);
-            EXPSTAT(EXPSTATS_RPBLE_PARENT_LOST);
             _current_parent = PARENT_NONE;
             /* back to 0, now we need to find a new parent... */
             _parent_find();
             break;
         case NIMBLE_NETIF_CLOSED_SLAVE:
-            _dbg_msg("CHILD lost", addr);
-            EXPSTAT(EXPSTATS_RPBLE_CHILD_LOST);
             _children_accept();
             break;
         case NIMBLE_NETIF_ABORT_MASTER:
             nimble_netif_accept_stop();
-            _dbg_msg("PARENT abort", addr);
-            EXPSTAT(EXPSTATS_RPBLE_PARENT_ABORT);
             _current_parent = PARENT_NONE;
             _parent_find();
             break;
         case NIMBLE_NETIF_ABORT_SLAVE:
-            _dbg_msg("CHILD abort", addr);
-            EXPSTAT(EXPSTATS_RPBLE_CHILD_ABORT);
             _children_accept();
             break;
         case NIMBLE_NETIF_CONN_UPDATED:
-            _dbg_msg("param update", addr);
             break;
         default:
             /* nothing to do for all other events */
@@ -303,12 +271,18 @@ int nimble_rpble_init(const nimble_rpble_cfg_t *cfg)
 
     memset(&_local_rpl_ctx, 0, sizeof(_local_rpl_ctx));
 
-    /** initialize the eval event */
+    /* initialize the eval event: using a random interval should prevent
+     * multiple nodes that startup in parallel from all connecting to the same
+     * parent at the same time */
     uint32_t itvl = random_uint32_range(cfg->eval_itvl, (2 * cfg->eval_itvl));
     ble_npl_time_ms_to_ticks(itvl / 1000, &_eval_itvl);
     ble_npl_callout_init(&_evt_eval, nimble_port_get_dflt_eventq(),
                          _parent_connect, NULL);
 
+    /* register event callback */
+    nimble_netif_eventcb(_on_netif_evt);
+
+    /* set the connection and scan parameters */
     _adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     _adv_params.disc_mode = BLE_GAP_DISC_MODE_LTD;
     _adv_params.itvl_min = (cfg->adv_itvl / BLE_HCI_ADV_ITVL);
@@ -323,10 +297,6 @@ int nimble_rpble_init(const nimble_rpble_cfg_t *cfg)
                                         BLE_HCI_CONN_SPVN_TMO_UNITS);
     _conn_timeout = cfg->conn_timeout / 1000;
 
-    /* register event callback */
-    nimble_netif_eventcb(_on_netif_evt);
-
-    /* configure scanner */
     struct ble_gap_disc_params scan_params = { 0 };
     scan_params.itvl = (cfg->scan_itvl / BLE_HCI_SCAN_ITVL);
     scan_params.window = (cfg->scan_win / BLE_HCI_SCAN_ITVL);
@@ -352,23 +322,17 @@ int nimble_rpble_update(const nimble_rpble_ctx_t *ctx)
 {
     assert(ctx != NULL);
 
-    // DEBUG("[rpble] RPL update [inst_id:%i, rank:%i]\n",
-    //       (int)ctx->inst_id, (int)ctx->rank);
+    DEBUG("[rpble] RPL update [inst_id:%i, rank:%i]\n",
+          (int)ctx->inst_id, (int)ctx->rank);
 
-    /* XXX: if the update context is equal to what we have, ignore it */
-    _local_rpl_ctx.free_slots = 0;
+    /* if the new context is equal to what we have, ignore it */
     if (memcmp(&_local_rpl_ctx, ctx, sizeof(nimble_rpble_ctx_t)) == 0) {
         DEBUG("[rpble] RPL update: ignored (no ctx data change)\n");
-        EXPSTAT(EXPSTATS_RPBLE_UPDATE_NO_CHANGE);
         return NIMBLE_RPBLE_NO_CHANGE;
     }
 
-    DEBUG("[rpble] RPL update: got new context data (rank %i, inst %i)\n",
-          (int)ctx->rank, (int)ctx->inst_id);
-
     /* save rpl context for future reference */
     memcpy(&_local_rpl_ctx, ctx, sizeof(nimble_rpble_ctx_t));
-    EXPSTAT(EXPSTATS_RPBLE_UPDATE_NEW_CTX);
 
     if (ctx->role == GNRC_RPL_ROOT_NODE) {
         DEBUG("[rpble] RPL update: we are root, advertising now\n");
