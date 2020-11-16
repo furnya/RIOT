@@ -75,12 +75,14 @@
 
 /* buffer configuration
  * - we need one RX and one TX buffer per connection */
+/*
 #define MTU_SIZE                (NIMBLE_NETIF_MTU)
 #define MBUF_OVHD               (sizeof(struct os_mbuf) + \
                                  sizeof(struct os_mbuf_pkthdr))
 #define MBUF_SIZE               (MBUF_OVHD + MYNEWT_VAL_BLE_L2CAP_COC_MPS)
 #define MBUF_CNT                (NIMBLE_NETIF_MAX_CONN * 2 * \
                                  ((MTU_SIZE + (MBUF_SIZE - 1)) / MBUF_SIZE))
+*/
 
 /* thread flag used for signaling transmit readiness */
 #define FLAG_TX_UNSTALLED       (1u << 13)
@@ -99,9 +101,9 @@ static gnrc_nettype_t _nettype = NETTYPE;
 static nimble_netif_eventcb_t _eventcb;
 
 /* allocation of memory for buffering IP packets when handing them to NimBLE */
-static os_membuf_t _mem[OS_MEMPOOL_SIZE(MBUF_CNT, MBUF_SIZE)];
-static struct os_mempool _mem_pool;
-static struct os_mbuf_pool _mbuf_pool;
+// static os_membuf_t _mem[OS_MEMPOOL_SIZE(MBUF_CNT, MBUF_SIZE)];
+// static struct os_mempool _mem_pool;
+// static struct os_mbuf_pool _mbuf_pool;
 
 /* notify the user about state changes for a connection context */
 static void _notify(int handle, nimble_netif_event_t event, uint8_t *addr)
@@ -136,7 +138,8 @@ static int _send_pkt(nimble_netif_conn_t *conn, gnrc_pktsnip_t *pkt)
     }
 
     /* copy the data into a newly allocated mbuf */
-    struct os_mbuf *sdu = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+    struct os_mbuf *sdu = os_msys_get_pkthdr(gnrc_pkt_len(pkt), 0);
+    // struct os_mbuf *sdu = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
     if (sdu == NULL) {
         return -ENOBUFS;
     }
@@ -329,7 +332,7 @@ static inline int _netdev_get(netdev_t *dev, netopt_t opt,
             break;
         case NETOPT_MAX_PDU_SIZE:
             assert(max_len >= sizeof(uint16_t));
-            *((uint16_t *)value) = MTU_SIZE;
+            *((uint16_t *)value) = NIMBLE_NETIF_MTU;
             res = sizeof(uint16_t);
             break;
         case NETOPT_PROTO:
@@ -448,7 +451,8 @@ static void _on_data(nimble_netif_conn_t *conn, struct ble_l2cap_event *event)
 end:
     /* free the mbuf and allocate a new one for receiving new data */
     os_mbuf_free_chain(rxb);
-    rxb = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+    // rxb = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+    rxb = os_msys_get_pkthdr(NIMBLE_NETIF_MTU / 4, 0);      // XXX HACK?!
     /* due to buffer provisioning, there should always be enough space */
     assert(rxb != NULL);
     ble_l2cap_recv_ready(event->receive.chan, rxb);
@@ -530,7 +534,9 @@ static int _on_l2cap_server_evt(struct ble_l2cap_event *event, void *arg)
             conn->state &= ~NIMBLE_NETIF_L2CAP_CONNECTED;
             break;
         case BLE_L2CAP_EVENT_COC_ACCEPT: {
-            struct os_mbuf *sdu_rx = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+
+            // struct os_mbuf *sdu_rx = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+            struct os_mbuf *sdu_rx = os_msys_get_pkthdr(NIMBLE_NETIF_MTU / 4, 0);
             /* there should always be enough buffer space */
             assert(sdu_rx != NULL);
             ble_l2cap_recv_ready(event->accept.chan, sdu_rx);
@@ -583,11 +589,12 @@ static int _on_gap_master_evt(struct ble_gap_event *event, void *arg)
             _on_gap_connected(conn, event->connect.conn_handle);
             conn->state |= NIMBLE_NETIF_GAP_MASTER;
 
-            struct os_mbuf *sdu_rx = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+            // struct os_mbuf *sdu_rx = os_mbuf_get_pkthdr(&_mbuf_pool, 0);
+            struct os_mbuf *sdu_rx = os_msys_get_pkthdr((NIMBLE_NETIF_MTU / 4), 0);
             /* we should never run out of buffer space... */
             assert(sdu_rx != NULL);
             res = ble_l2cap_connect(event->connect.conn_handle,
-                                    NIMBLE_NETIF_CID, MTU_SIZE, sdu_rx,
+                                    NIMBLE_NETIF_CID, NIMBLE_NETIF_MTU, sdu_rx,
                                     _on_l2cap_client_evt, (void *)handle);
             /* should always success as well */
             assert(res == 0);
@@ -669,11 +676,11 @@ void nimble_netif_init(void)
     nimble_netif_conn_init();
 
     /* initialize of BLE related buffers */
-    res = mem_init_mbuf_pool(_mem, &_mem_pool, &_mbuf_pool,
-                             MBUF_CNT, MBUF_SIZE, "nim_gnrc");
-    assert(res == 0);
+    // res = mem_init_mbuf_pool(_mem, &_mem_pool, &_mbuf_pool,
+    //                          MBUF_CNT, MBUF_SIZE, "nim_gnrc");
+    // assert(res == 0);
 
-    res = ble_l2cap_create_server(NIMBLE_NETIF_CID, MTU_SIZE,
+    res = ble_l2cap_create_server(NIMBLE_NETIF_CID, NIMBLE_NETIF_MTU,
                                   _on_l2cap_server_evt, NULL);
     assert(res == 0);
     (void)res;
