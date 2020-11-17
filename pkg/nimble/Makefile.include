@@ -98,7 +98,7 @@ ifneq (,$(filter nimble_netif,$(USEMODULE)))
   CFLAGS += -DMYNEWT_VAL_BLE_MAX_CONNECTIONS=$(NIMBLE_MAX_CONN)
   # NimBLEs internal buffer need to hold one IPv6 MTU per connection
   # for the internal MTU of 256 byte, we need 10 mbufs per connection...
-  CFLAGS += -DMYNEWT_VAL_MSYS_1_BLOCK_COUNT=55
+  CFLAGS += -DMYNEWT_VAL_MSYS_1_BLOCK_COUNT=40
 
   # optimize the NimBLE controller for IP traffic
   ifneq (,$(filter nimble_controller,$(USEMODULE)))
